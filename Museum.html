@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>MR Museum - Final TP Setup</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+            background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .title-box { background-color: #222; color: white; padding: 20px 40px; border-radius: 8px; margin-bottom: 30px; text-align: center; }
+        .title-box h1 { margin: 0; font-size: 3rem; text-transform: uppercase; }
+        .button-container { display: flex; gap: 20px; }
+        .start-btn { background-color: #444; color: white; border: 2px solid #666; padding: 15px 30px; font-size: 1.2rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; font-weight: bold; }
+        .start-btn:hover { background-color: #ffd700; color: black; border-color: #ffd700; transform: scale(1.05); }
+        
+        /* WEB MAP */
+        #open-map-btn { position: fixed; top: 20px; right: 20px; z-index: 1000; background: rgba(0, 0, 0, 0.6); color: white; border: 1px solid white; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: bold; display: none; }
+        #map-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5000; display: none; background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px); justify-content: center; align-items: center; flex-direction: column; }
+        .map-container { position: relative; width: 80%; max-width: 1200px; aspect-ratio: 16/9; background-size: cover; background-position: center; border: 5px solid #333; border-radius: 10px; background-color: #111; }
+        .floor-switch { display: flex; gap: 10px; margin-bottom: 15px; }
+        .floor-btn { background: #333; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; }
+        .floor-btn.active { background: #ffd700; color: black; font-weight: bold; }
+        .close-map { margin-top: 15px; background: transparent; color: white; border: 1px solid white; padding: 8px 16px; cursor: pointer; border-radius: 4px; }
+        .map-pin { position: absolute; width: 20px; height: 20px; background-color: #ff3333; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; z-index: 10; }
+        .map-pin:hover { background-color: #ffd700; transform: translate(-50%, -50%) scale(1.5); z-index: 20; }
+        .map-pin::after { content: attr(data-label); position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; }
+        .map-pin:hover::after { opacity: 1; }
+    </style>
+
+    <script>
+    // --- COMPONENTS ---
+
+    AFRAME.registerComponent('debug-manager', {
+        init: function () {
+            this.isDebug = false;
+            const cam = document.querySelector('[camera]');
+            cam.setAttribute('wasd-controls', 'enabled: false');
+            window.addEventListener('keydown', (e) => {
+                if (e.key === '*') {
+                    this.isDebug = !this.isDebug;
+                    cam.setAttribute('wasd-controls', `enabled: ${this.isDebug}`);
+                    if (this.isDebug) this.el.sceneEl.addState('debug');
+                    else this.el.sceneEl.removeState('debug');
+                }
+            });
+        }
+    });
+
+    AFRAME.registerComponent('coordinate-logger', {
+        init: function () {
+            window.addEventListener('keydown', (e) => {
+                if (!this.el.sceneEl.is('debug')) return;
+                if (e.key.toLowerCase() === 'c') {
+                    const cam = document.querySelector('[camera]');
+                    const worldPos = new THREE.Vector3();
+                    cam.object3D.getWorldPosition(worldPos);
+                    const camRot = cam.getAttribute('rotation');
+                    const rigRot = document.querySelector('#rig').getAttribute('rotation');
+                    const totalY = (camRot.y + rigRot.y).toFixed(0);
+                    console.log(`pos: "${worldPos.x.toFixed(2)} ${worldPos.y.toFixed(2)} ${worldPos.z.toFixed(2)}"; rot: "0 ${totalY} 0"`);
+                }
+            });
+        }
+    });
+
+    AFRAME.registerComponent('tour-manager', {
+        init: function () {
+            // Vollständige Liste für die 'T'-Taste
+            this.points = [
+                { pos: "35.83 6.80 0.06",   rot: "0 -92 0" }, { pos: "30.44 6.80 -12.19", rot: "0 -59 0" },
+                { pos: "20.59 6.80 -30.67", rot: "0 -60 0" }, { pos: "5.85 6.80 -55.37",  rot: "0 -65 0" },
+                { pos: "-42.84 6.80 -5.14", rot: "0 83 0" },  { pos: "-41.47 6.80 26.00", rot: "0 97 0" },
+                { pos: "-33.14 6.80 50.55", rot: "0 114 0" }, { pos: "36.25 22.60 0.18",  rot: "0 270 0" },
+                { pos: "31.13 22.60 -12.43",rot: "0 301 0" }, { pos: "20.83 22.60 -30.48",rot: "0 301 0" },
+                { pos: "16.56 22.60 -18.06",rot: "0 500 0" }, { pos: "-23.82 22.60 -17.73",rot: "0 580 0" },
+                { pos: "-28.62 6.80 -31.76",rot: "0 719 0" }, { pos: "7.93 22.60 -52.46", rot: "0 660 0" },
+                { pos: "-40.87 22.60 -4.57",rot: "0 806 0" }
+            ];
+            this.index = -1;
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 't') {
+                    this.index = (this.index + 1) % this.points.length;
+                    const p = this.points[this.index];
+                    const rig = document.querySelector('#rig');
+                    rig.setAttribute('position', p.pos);
+                    rig.setAttribute('rotation', p.rot);
+                }
+            });
+        }
+    });
+
+    // --- VR TABLET LOGIC ---
+    AFRAME.registerComponent('vr-controller-handler', {
+        init: function () {
+            // Tasten: Y oder B Button (Menü)
+            this.el.addEventListener('bbuttondown', this.toggleVRMap.bind(this));
+            this.el.addEventListener('ybuttondown', this.toggleVRMap.bind(this));
+            
+            this.mapVisible = false;
+            this.tablet = document.querySelector('#vr-tablet');
+        },
+        toggleVRMap: function () {
+            // Im VR Modus: 3D Tablet umschalten
+            if (this.el.sceneEl.is('vr-mode')) {
+                this.mapVisible = !this.mapVisible;
+                this.tablet.setAttribute('visible', this.mapVisible);
+                
+                // Wir müssen der Klasse 'vr-clickable' sagen, ob sie interagierbar ist
+                const pins = document.querySelectorAll('.vr-map-pin');
+                pins.forEach(pin => {
+                    if(this.mapVisible) pin.classList.add('clickable');
+                    else pin.classList.remove('clickable');
+                });
+            } else {
+                // Im Web Modus: HTML Overlay nutzen
+                if (typeof openMap === 'function') {
+                    const mapOverlay = document.getElementById('map-overlay');
+                    if (mapOverlay && mapOverlay.style.display === 'flex') closeMap();
+                    else openMap();
+                }
+            }
+        }
+    });
+
+    // Component um Pins auf dem 3D Tablet klickbar zu machen
+    AFRAME.registerComponent('vr-map-pin-click', {
+        schema: {
+            pos: {type: 'vec3'},
+            rot: {type: 'vec3'}
+        },
+        init: function () {
+            this.el.addEventListener('click', () => {
+                // Teleport
+                const rig = document.querySelector('#rig');
+                rig.setAttribute('position', this.data.pos);
+                rig.setAttribute('rotation', this.data.rot);
+                
+                // Karte schließen nach Teleport
+                const tablet = document.querySelector('#vr-tablet');
+                tablet.setAttribute('visible', false);
+                
+                // Clickable Klasse entfernen damit man nicht aus Versehen klickt
+                const pins = document.querySelectorAll('.vr-map-pin');
+                pins.forEach(pin => pin.classList.remove('clickable'));
+                
+                // Handler status updaten (Hacky, aber funktioniert)
+                const handler = document.querySelector('[vr-controller-handler]').components['vr-controller-handler'];
+                if(handler) handler.mapVisible = false;
+            });
+            
+            // Hover Effekte für VR Laser
+            this.el.addEventListener('mouseenter', () => {
+                this.el.setAttribute('color', '#ffd700'); // Gelb
+                this.el.setAttribute('scale', '1.5 1.5 1.5');
+            });
+            this.el.addEventListener('mouseleave', () => {
+                this.el.setAttribute('color', '#ff3333'); // Rot zurück
+                this.el.setAttribute('scale', '1 1 1');
+            });
+        }
+    });
+
+    AFRAME.registerComponent('teleport-to', {
+        schema: { pos: {type: 'vec3'}, rot: {type: 'vec3', default: {x: 0, y: 0, z: 0}} },
+        init: function () {
+            this.el.addEventListener('click', () => {
+                const rig = document.querySelector('#rig');
+                rig.setAttribute('position', this.data.pos);
+                if (this.data.rot.x !== 0 || this.data.rot.y !== 0 || this.data.rot.z !== 0) {
+                     rig.setAttribute('rotation', this.data.rot);
+                }
+            });
+        }
+    });
+
+    AFRAME.registerComponent('viewer-engine', {
+        init: function () {
+            const renderer = this.el.sceneEl.renderer;
+            const scene = this.el.sceneEl.object3D;
+            renderer.toneMapping = THREE.NeutralToneMapping;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            new THREE.TextureLoader().load('assets/Sky.jpg', (texture) => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                texture.colorSpace = THREE.SRGBColorSpace;
+                scene.environment = texture;
+                scene.environmentIntensity = 0.8;
+            });
+        }
+    });
+
+    AFRAME.registerComponent('apply-shadows', {
+        init: function () {
+            this.el.addEventListener('model-loaded', () => {
+                const mesh = this.el.getObject3D('mesh');
+                if (mesh) mesh.traverse((n) => { if (n.isMesh) { n.castShadow = n.receiveShadow = true; if (n.material) n.material.shadowSide = THREE.DoubleSide; } });
+            });
+        }
+    });
+
+    AFRAME.registerComponent('elevator-controls', {
+        init: function () {
+            this.speed = 0.2; 
+            window.addEventListener('keydown', (e) => {
+                if (!this.el.sceneEl.is('debug')) return;
+                var pos = this.el.getAttribute('position');
+                if (e.key.toLowerCase() === 'e') pos.y += this.speed;
+                if (e.key.toLowerCase() === 'q') pos.y -= this.speed;
+                this.el.setAttribute('position', pos);
+            });
+        }
+    });
+    </script>
+</head>
+<body>
+
+    <div id="start-screen">
+        <div class="title-box"><h1>MR Museum</h1></div>
+        <div class="button-container">
+            <button class="start-btn" id="btn-web">Im Web Starten</button>
+            <button class="start-btn" id="btn-vr">In VR Starten</button>
+        </div>
+    </div>
+    <button id="open-map-btn" onclick="openMap()">🗺️ Karte (M)</button>
+    <div id="map-overlay">
+        <div class="floor-switch">
+            <button class="floor-btn active" id="btn-eg" onclick="switchFloor('EG')">Erdgeschoss</button>
+            <button class="floor-btn" id="btn-og" onclick="switchFloor('OG')">Obergeschoss</button>
+        </div>
+        <div class="map-container" id="map-container"></div>
+        <button class="close-map" onclick="closeMap()">Schließen</button>
+    </div>
+
+    <a-scene viewer-engine debug-manager coordinate-logger tour-manager renderer="colorManagement: true; antialias: true;">
+        <a-assets>
+            <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
+            <img id="sky-img" src="assets/Sky.jpg">
+            <img id="map-eg-tex" src="assets/Erdgeschoss.png">
+            <img id="map-og-tex" src="assets/Obergeschoss.png">
+        </a-assets>
+
+        <a-sky src="#sky-img" rotation="0 -90 0"></a-sky>
+        <a-light type="directional" intensity="2.0" position="10 20 10" castShadow="true"></a-light>
+        <a-light type="ambient" intensity="0.4"></a-light>
+        <a-gltf-model src="#museum-model" position="0 0 0" apply-shadows></a-gltf-model>
+
+        <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="35.83 5.22 0.06" rotation="-90 0 0" class="clickable" teleport-to="pos: 35.83 6.80 0.06; rot: 0 -92 0"></a-ring>
+        <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="30.44 5.22 -12.19" rotation="-90 0 0" class="clickable" teleport-to="pos: 30.44 6.80 -12.19; rot: 0 -59 0"></a-ring>
+        
+        <a-entity id="rig" position="34.65 6.80 20.04" rotation="0 788 0" elevator-controls>
+            <a-entity camera wasd-controls="acceleration: 65" look-controls>
+                <a-cursor color="yellow" raycaster="objects: .clickable"></a-cursor>
+            </a-entity>
+
+            <a-entity id="leftHand" laser-controls="hand: left" raycaster="objects: .clickable; far: 10" vr-controller-handler>
+                
+                <a-entity id="vr-tablet" visible="false" position="0.1 0.05 -0.15" rotation="-45 90 0" scale="0.3 0.3 0.3">
+                    
+                    <a-box width="1.05" height="0.65" depth="0.01" color="#222" position="0 0 -0.01"></a-box>
+                    
+                    <a-plane id="vr-map-plane" src="#map-eg-tex" width="1.0" height="0.5625" position="0 0 0" shader="flat"></a-plane>
+                    
+                    <a-entity id="vr-pins-container" position="-0.5 0.28125 0.01"></a-entity>
+
+                    <a-entity position="0 -0.35 0">
+                        <a-box class="vr-map-pin clickable" color="#444" width="0.4" height="0.1" depth="0.02" position="-0.25 0 0"
+                               event-set__enter="_event: mouseenter; color: #ffd700" 
+                               event-set__leave="_event: mouseleave; color: #444"
+                               onclick="switchVRFloor('EG')">
+                            <a-text value="EG" align="center" color="white" position="0 0 0.02" width="2"></a-text>
+                        </a-box>
+                        <a-box class="vr-map-pin clickable" color="#444" width="0.4" height="0.1" depth="0.02" position="0.25 0 0"
+                               event-set__enter="_event: mouseenter; color: #ffd700" 
+                               event-set__leave="_event: mouseleave; color: #444"
+                               onclick="switchVRFloor('OG')">
+                            <a-text value="OG" align="center" color="white" position="0 0 0.02" width="2"></a-text>
+                        </a-box>
+                    </a-entity>
+                </a-entity>
+            </a-entity>
+
+            <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable, .vr-map-pin; far: 10" vr-controller-handler></a-entity>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        // --- JAVASCRIPT LOGIK ---
+        
+        const startOverlay = document.getElementById('start-screen');
+        const mapOverlay = document.getElementById('map-overlay');
+        const mapContainer = document.getElementById('map-container');
+        const btnOpenMap = document.getElementById('open-map-btn');
+        const btnEG = document.getElementById('btn-eg');
+        const btnOG = document.getElementById('btn-og');
+        const scene = document.querySelector('a-scene');
+
+        const REF_WIDTH = 1920; 
+        const REF_HEIGHT = 1080;
+
+        // Daten für Web UND VR
+        const mapData = [
+            { floor: 'EG', name: 'Podest 1', px: 1024, py: 715, pos: "35.83 6.80 0.06", rot: "0 -92 0" },
+            { floor: 'EG', name: 'Podest 2', px: 1116, py: 667, pos: "30.44 6.80 -12.19", rot: "0 -59 0" },
+            { floor: 'EG', name: 'Podest 3', px: 1256, py: 586, pos: "20.59 6.80 -30.67", rot: "0 -60 0" },
+            { floor: 'EG', name: 'Podest 4', px: 1447, py: 481, pos: "5.85 6.80 -55.37", rot: "0 -65 0" },
+            { floor: 'EG', name: 'Podest 5', px: 1066, py: 96,  pos: "-42.84 6.80 -5.14", rot: "0 83 0" },
+            { floor: 'EG', name: 'Podest 6', px: 825,  py: 110, pos: "-41.47 6.80 26.00", rot: "0 97 0" },
+            { floor: 'EG', name: 'Podest 7', px: 631,  py: 172, pos: "-33.14 6.80 50.55", rot: "0 114 0" },
+            { floor: 'EG', name: 'Bild 1',   px: 1286, py: 222, pos: "-28.62 6.80 -31.76", rot: "0 719 0" },
+            { floor: 'OG', name: 'Podest 8', px: 1024, py: 715, pos: "36.25 22.60 0.18", rot: "0 270 0" },
+            { floor: 'OG', name: 'Podest 9', px: 1116, py: 667, pos: "31.13 22.60 -12.43", rot: "0 301 0" },
+            { floor: 'OG', name: 'Podest 10', px: 1256, py: 586, pos: "20.83 22.60 -30.48", rot: "0 301 0" },
+            { floor: 'OG', name: 'Podest 11', px: 1150, py: 552, pos: "16.56 22.60 -18.06", rot: "0 500 0" },
+            { floor: 'OG', name: 'Podest 12', px: 1157, py: 253, pos: "-23.82 22.60 -17.73", rot: "0 580 0" },
+            { floor: 'OG', name: 'Bild 2',    px: 1434, py: 511, pos: "7.93 22.60 -52.46", rot: "0 660 0" },
+            { floor: 'OG', name: 'Bild 3',    px: 1035, py: 93,  pos: "-40.87 22.60 -4.57", rot: "0 806 0" }
+        ];
+
+        let currentFloor = 'EG';
+
+        // --- START LOGIK ---
+        function startGame() {
+            startOverlay.style.display = 'none';
+            btnOpenMap.style.display = 'block'; 
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 'm') {
+                    if (mapOverlay.style.display === 'flex') closeMap();
+                    else openMap();
+                }
+            });
+            // Initialisiere VR Pins
+            renderVRPins();
+        }
+
+        document.getElementById('btn-web').addEventListener('click', startGame);
+        document.getElementById('btn-vr').addEventListener('click', () => {
+            startGame();
+            scene.enterVR();
+        });
+
+        // --- WEB MAP FUNKTIONEN ---
+        function openMap() {
+            mapOverlay.style.display = 'flex';
+            renderPins();
+        }
+        function closeMap() {
+            mapOverlay.style.display = 'none';
+        }
+        function switchFloor(floor) {
+            currentFloor = floor;
+            if(floor === 'EG') {
+                btnEG.classList.add('active'); btnOG.classList.remove('active');
+            } else {
+                btnEG.classList.remove('active'); btnOG.classList.add('active');
+            }
+            renderPins();
+        }
+        function renderPins() {
+            if (currentFloor === 'EG') mapContainer.style.backgroundImage = "url('assets/Erdgeschoss.png')";
+            else mapContainer.style.backgroundImage = "url('assets/Obergeschoss.png')";
+            
+            mapContainer.innerHTML = '';
+            mapData.forEach(point => {
+                if (point.floor === currentFloor) {
+                    const pin = document.createElement('div');
+                    pin.className = 'map-pin';
+                    pin.setAttribute('data-label', point.name); 
+                    pin.style.left = (point.px / REF_WIDTH) * 100 + '%';
+                    pin.style.top = (point.py / REF_HEIGHT) * 100 + '%';
+                    pin.onclick = () => {
+                        const rig = document.querySelector('#rig');
+                        rig.setAttribute('position', point.pos);
+                        rig.setAttribute('rotation', point.rot);
+                        closeMap();
+                    };
+                    mapContainer.appendChild(pin);
+                }
+            });
+        }
+
+        // --- VR MAP FUNKTIONEN ---
+        // Diese Funktion wird global verfügbar gemacht für die OnClick-Events der 3D Buttons
+        window.switchVRFloor = function(floor) {
+            currentFloor = floor;
+            const vrMapPlane = document.getElementById('vr-map-plane');
+            if (floor === 'EG') vrMapPlane.setAttribute('src', '#map-eg-tex');
+            else vrMapPlane.setAttribute('src', '#map-og-tex');
+            renderVRPins();
+        }
+
+        function renderVRPins() {
+            const container = document.getElementById('vr-pins-container');
+            container.innerHTML = ''; // Löschen
+
+            // Tablet Dimensionen (Abgestimmt auf die a-plane Größe)
+            const mapWidth3D = 1.0;
+            const mapHeight3D = 0.5625;
+
+            mapData.forEach(point => {
+                if (point.floor === currentFloor) {
+                    // Umrechnung Pixel -> 3D Koordinaten
+                    // In Web: 0/0 ist oben links. In 3D: 0/0 ist Mitte.
+                    // X: (px / 1920) * Breite
+                    const x = (point.px / REF_WIDTH) * mapWidth3D;
+                    // Y: (px / 1080) * Höhe (Invertiert, weil Y nach oben positiv ist)
+                    const y = -((point.py / REF_HEIGHT) * mapHeight3D);
+
+                    // Pin erstellen
+                    const pin = document.createElement('a-circle');
+                    pin.setAttribute('radius', '0.02');
+                    pin.setAttribute('color', '#ff3333');
+                    pin.setAttribute('position', `${x} ${y} 0.01`);
+                    pin.setAttribute('class', 'vr-map-pin'); // Wichtig: Erstmal NICHT clickable (wird bei Toggle gesetzt)
+                    
+                    // Component anhängen für Klick-Logik
+                    pin.setAttribute('vr-map-pin-click', {
+                        pos: point.pos,
+                        rot: point.rot
+                    });
+
+                    container.appendChild(pin);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
