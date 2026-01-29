@@ -94,6 +94,34 @@
         }
     });
 
+    // --- NEU: AUTO ROTATION WENN NUTZER NAH IST ---
+    AFRAME.registerComponent('auto-rotate-when-near', {
+        schema: {
+            triggerPos: {type: 'vec3'}, // Wo steht der Nutzer? (Position des Rings)
+            baseRot: {type: 'vec3'}     // Die "Ruhe"-Rotation (Ausrichtung zum Nutzer)
+        },
+        init: function () {
+            this.rig = document.querySelector('#rig');
+            this.isRotating = false;
+        },
+        tick: function (time, timeDelta) {
+            // Berechne Distanz zwischen Nutzer (Rig) und dem Auslöse-Punkt (Ring)
+            const rigPos = this.rig.getAttribute('position');
+            const dist = new THREE.Vector3(rigPos.x, rigPos.y, rigPos.z).distanceTo(this.data.triggerPos);
+
+            // Wenn Nutzer nah dran ist (weniger als 2 Meter), drehen
+            if (dist < 2.0) {
+                this.el.object3D.rotation.y += 0.0005 * timeDelta; // Geschwindigkeit der Drehung
+                this.isRotating = true;
+            } 
+            // Wenn Nutzer weggeht und es sich noch dreht -> Reset zur Startposition
+            else if (this.isRotating) {
+                this.el.setAttribute('rotation', this.data.baseRot);
+                this.isRotating = false;
+            }
+        }
+    });
+
     // --- VR TABLET LOGIC ---
     AFRAME.registerComponent('vr-controller-handler', {
         init: function () {
@@ -242,12 +270,45 @@
             <img id="sky-img" src="assets/Sky.jpg">
             <img id="map-eg-tex" src="assets/Erdgeschoss.png">
             <img id="map-og-tex" src="assets/Obergeschoss.png">
+
+            <a-asset-item id="hmd-rift-cv1" src="assets/oculus_rift_cv1.glb"></a-asset-item>
+            <a-asset-item id="hmd-quest1" src="assets/oculus_quest_vr_headset.glb"></a-asset-item>
+            <a-asset-item id="hmd-quest2" src="assets/oculus_quest_2.glb"></a-asset-item>
+            <a-asset-item id="hmd-quest3" src="assets/meta_quest_3.glb"></a-asset-item>
         </a-assets>
 
         <a-sky src="#sky-img" rotation="0 -90 0"></a-sky>
         <a-light type="directional" intensity="2.0" position="10 20 10" castShadow="true"></a-light>
         <a-light type="ambient" intensity="0.4"></a-light>
         <a-gltf-model src="#museum-model" position="0 0 0" apply-shadows></a-gltf-model>
+
+        <a-gltf-model src="#hmd-rift-cv1" 
+                      position="41.63 5.50 0.41" 
+                      rotation="0 989 0" 
+                      scale="0.25 0.25 0.25" 
+                      apply-shadows
+                      auto-rotate-when-near="triggerPos: 35.83 6.80 0.06; baseRot: 0 989 0"></a-gltf-model>
+        
+        <a-gltf-model src="#hmd-quest1" 
+                      position="35.5 5.50 -14.9" 
+                      rotation="0 1022 0" 
+                      scale="9.5 9.5 9.5" 
+                      apply-shadows
+                      auto-rotate-when-near="triggerPos: 30.44 6.80 -12.19; baseRot: 0 1022 0"></a-gltf-model>
+        
+        <a-gltf-model src="#hmd-quest2" 
+                      position="25.3 5.50 -33.0" 
+                      rotation="0 1021 0" 
+                      scale="3 3 3" 
+                      apply-shadows
+                      auto-rotate-when-near="triggerPos: 20.59 6.80 -30.67; baseRot: 0 1021 0"></a-gltf-model>
+        
+        <a-gltf-model src="#hmd-quest3" 
+                      position="11.76 5.80 -58.25" 
+                      rotation="0 1019 0" 
+                      scale="5 5 5" 
+                      apply-shadows
+                      auto-rotate-when-near="triggerPos: 5.85 6.80 -55.37; baseRot: 0 1019 0"></a-gltf-model>
 
         <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="35.83 5.22 0.06" rotation="-90 0 0" class="clickable" teleport-to="pos: 35.83 6.80 0.06; rot: 0 -92 0"></a-ring>
         <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="30.44 5.22 -12.19" rotation="-90 0 0" class="clickable" teleport-to="pos: 30.44 6.80 -12.19; rot: 0 -59 0"></a-ring>
@@ -308,17 +369,17 @@
             { floor: 'EG', name: 'Podest 2', px: 1116, py: 667, pos: "30.44 6.80 -12.19", rot: "0 -59 0" },
             { floor: 'EG', name: 'Podest 3', px: 1256, py: 586, pos: "20.59 6.80 -30.67", rot: "0 -60 0" },
             { floor: 'EG', name: 'Podest 4', px: 1447, py: 481, pos: "5.85 6.80 -55.37", rot: "0 -65 0" },
-            { floor: 'EG', name: 'Podest 5', px: 1066, py: 96,  pos: "-42.84 6.80 -5.14", rot: "0 83 0" },
-            { floor: 'EG', name: 'Podest 6', px: 825,  py: 110, pos: "-41.47 6.80 26.00", rot: "0 97 0" },
-            { floor: 'EG', name: 'Podest 7', px: 631,  py: 172, pos: "-33.14 6.80 50.55", rot: "0 114 0" },
-            { floor: 'EG', name: 'Bild 1',   px: 1286, py: 222, pos: "-28.62 6.80 -31.76", rot: "0 719 0" },
+            { floor: 'EG', name: 'Podest 5', px: 1066, py: 96,  pos: "-42.84 6.80 -5.14", rot: "0 83 0" },
+            { floor: 'EG', name: 'Podest 6', px: 825,  py: 110, pos: "-41.47 6.80 26.00", rot: "0 97 0" },
+            { floor: 'EG', name: 'Podest 7', px: 631,  py: 172, pos: "-33.14 6.80 50.55", rot: "0 114 0" },
+            { floor: 'EG', name: 'Bild 1',   px: 1286, py: 222, pos: "-28.62 6.80 -31.76", rot: "0 719 0" },
             { floor: 'OG', name: 'Podest 8', px: 1024, py: 715, pos: "36.25 22.60 0.18", rot: "0 270 0" },
             { floor: 'OG', name: 'Podest 9', px: 1116, py: 667, pos: "31.13 22.60 -12.43", rot: "0 301 0" },
             { floor: 'OG', name: 'Podest 10', px: 1256, py: 586, pos: "20.83 22.60 -30.48", rot: "0 301 0" },
             { floor: 'OG', name: 'Podest 11', px: 1150, py: 552, pos: "16.56 22.60 -18.06", rot: "0 500 0" },
             { floor: 'OG', name: 'Podest 12', px: 1157, py: 253, pos: "-23.82 22.60 -17.73", rot: "0 580 0" },
-            { floor: 'OG', name: 'Bild 2',    px: 1434, py: 511, pos: "7.93 22.60 -52.46", rot: "0 660 0" },
-            { floor: 'OG', name: 'Bild 3',    px: 1035, py: 93,  pos: "-40.87 22.60 -4.57", rot: "0 806 0" }
+            { floor: 'OG', name: 'Bild 2',    px: 1434, py: 511, pos: "7.93 22.60 -52.46", rot: "0 660 0" },
+            { floor: 'OG', name: 'Bild 3',    px: 1035, py: 93,  pos: "-40.87 22.60 -4.57", rot: "0 806 0" }
         ];
 
         let currentFloor = 'EG';
@@ -429,4 +490,4 @@
         }
     </script>
 </body>
-</html>
+</html>"
