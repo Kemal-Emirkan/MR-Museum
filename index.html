@@ -212,7 +212,7 @@
         }
     });
 
-    // --- FINAL FIX: AR MANAGER ---
+    // --- AGGRESSIVE AR MANAGER (ID FIX + SCALE HACK + DISTANCE FIX) ---
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -220,8 +220,11 @@
             this.activePanel = null;
             this.originalState = { pos: null, rot: null, scale: null };
             this.originalPanelState = { pos: null, rot: null, scale: null };
-            this.museumOriginalScale = {x: 1, y: 1, z: 1}; // Default
+            this.museumOriginalScale = {x: 1, y: 1, z: 1}; 
             
+            // Cooldown für VR Button, damit er nicht prellt/flackert
+            this.lastToggleTime = 0;
+
             // Referenzen
             this.rig = document.querySelector('#rig');
             this.camera = document.querySelector('[camera]');
@@ -235,6 +238,13 @@
             });
         },
         toggleAR: function () {
+            // Debounce Check (Verhindert doppeltes Feuern in VR)
+            const now = Date.now();
+            if (now - this.lastToggleTime < 500) {
+                return;
+            }
+            this.lastToggleTime = now;
+
             console.log("AR Toggle Triggered");
             if (this.inAR) {
                 this.exitAR();
@@ -249,20 +259,18 @@
             const rings = document.querySelectorAll('a-ring');
             
             if(museum) {
-                // Skalierung sicher speichern (Deep Copy der Werte)
                 const s = museum.getAttribute('scale');
                 if (s) {
                     this.museumOriginalScale = {x: s.x, y: s.y, z: s.z};
                 }
 
-                // Museum unsichtbar machen (Doppelter Schutz)
                 museum.setAttribute('scale', '0 0 0');
                 museum.setAttribute('visible', false);
                 
                 if(museum.object3D) {
                     museum.object3D.visible = false;
                     museum.object3D.scale.set(0, 0, 0);
-                    // Auch alle Kinder unsichtbar schalten (Wichtig!)
+                    // Auch alle Kinder unsichtbar schalten
                     museum.object3D.traverse((node) => {
                         node.visible = false;
                     });
@@ -275,29 +283,34 @@
             }
             rings.forEach(r => r.setAttribute('visible', false));
             
-            // Environment löschen
             if (this.el.sceneEl.object3D.background) this.el.sceneEl.object3D.background = null; 
             if (this.el.sceneEl.object3D.environment) this.el.sceneEl.object3D.environment = null;
 
-            // Panels und Artefakte verstecken
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN ---
+            // --- 2. NÄCHSTES OBJEKT FINDEN (FIX: RADIUS ERHÖHT) ---
             let closest = null;
-            let minDst = 1000;
+            let minDst = 1000; 
             const camWorldPos = new THREE.Vector3();
             this.camera.object3D.getWorldPosition(camWorldPos);
 
+            // Radius drastisch erhöht (auf 50), damit in VR immer etwas gefunden wird
             document.querySelectorAll('.ar-artifact').forEach(el => {
                 const dist = el.object3D.getWorldPosition(new THREE.Vector3()).distanceTo(camWorldPos);
-                if (dist < 6.0) { 
+                if (dist < 50.0) {  
                     if (dist < minDst) {
                         minDst = dist;
                         closest = el;
                     }
                 }
             });
+
+            // Fallback: Wenn trotzdem nichts gefunden wird (sollte nicht passieren), nimm das erste
+            if (!closest) {
+                const allArtifacts = document.querySelectorAll('.ar-artifact');
+                if (allArtifacts.length > 0) closest = allArtifacts[0];
+            }
 
             if (!closest) {
                 console.warn("Kein Artefakt gefunden. Abbruch.");
@@ -388,18 +401,15 @@
             const rings = document.querySelectorAll('a-ring');
 
             if(museum) {
-                // A-Frame Ebene
                 museum.setAttribute('visible', true);
                 museum.setAttribute('scale', this.museumOriginalScale);
 
-                // Three.js Ebene (HIER IST DER FIX)
                 if(museum.object3D) {
                     museum.object3D.visible = true;
-                    // Wir müssen auch alle KINDER wieder sichtbar machen!
+                    // FIX: Alle Kinder auch wieder sichtbar machen
                     museum.object3D.traverse((node) => {
                         node.visible = true;
                     });
-                    // Skalierung erzwingen
                     museum.object3D.scale.set(
                         this.museumOriginalScale.x, 
                         this.museumOriginalScale.y, 
@@ -600,7 +610,7 @@
         <button class="close-map" onclick="closeMap()">Schließen</button>
     </div>
 
-    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true;">
+    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true;" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
             <img id="sky-img" src="assets/Sky.jpg">
