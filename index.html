@@ -33,6 +33,25 @@
     </style>
 
     <script>
+    // --- DATENBANK FÜR INFO TEXTE ---
+    const deviceContent = {
+        'rift-cv1': { title: 'Oculus Rift CV1', maker: 'Oculus VR (Facebook)', year: '2016', text: 'Die erste kommerzielle Version der Oculus Rift. Sie markierte den Beginn der modernen VR-Aera für Konsumenten.' },
+        'quest1':   { title: 'Oculus Quest', maker: 'Oculus (Meta)', year: '2019', text: 'Das erste autarke 6DOF-Headset, das keine Kabel oder externen Sensoren mehr benoetigte.' },
+        'quest2':   { title: 'Meta Quest 2', maker: 'Meta', year: '2020', text: 'Ein massiver Erfolg im Massenmarkt durch guenstigen Preis und hohe Aufloesung. Brachte VR zu Millionen von Nutzern.' },
+        'quest3':   { title: 'Meta Quest 3', maker: 'Meta', year: '2023', text: 'Der aktuelle Standard für Mixed Reality. Mit Farb-Passthrough und Pancake-Linsen für ein schaerferes Bild.' },
+        'cardboard':{ title: 'Google Cardboard', maker: 'Google', year: '2014', text: 'Eine einfache Halterung aus Pappe, die Smartphones in VR-Brillen verwandelte. Der guenstigste Einstieg in VR.' },
+        'daydream': { title: 'Google Daydream', maker: 'Google', year: '2016', text: 'Googles Versuch einer hochwertigen mobilen VR-Plattform mit Stoffbezug und kleinem Controller.' },
+        'hololens': { title: 'Microsoft HoloLens', maker: 'Microsoft', year: '2016', text: 'Die erste eigenstaendige holografische Computerbrille, die echte Mixed Reality im Business-Bereich ermoeglichte.' },
+        'valve':    { title: 'Valve Index', maker: 'Valve', year: '2019', text: 'Bekannt für High-End-Audio und die revolutionären Knuckles-Controller mit Fingertracking.' },
+        'avp':      { title: 'Apple Vision Pro', maker: 'Apple', year: '2024', text: 'Apples Einstieg in das "Spatial Computing". Extrem hohe Aufloesung und Steuerung nur durch Augen und Haende.' },
+        'psvr':     { title: 'PlayStation VR', maker: 'Sony', year: '2016', text: 'Brachte VR auf die PlayStation 4. Trotz veralteter Tracking-Technik extrem erfolgreich.' },
+        'vive':     { title: 'HTC Vive', maker: 'HTC / Valve', year: '2016', text: 'Pionier des Room-Scale VR. Mit den Lighthouse-Basisstationen war praezises Bewegen im Raum moeglich.' },
+        'vivepro':  { title: 'HTC Vive Pro', maker: 'HTC', year: '2018', text: 'Das Upgrade für professionelle Nutzer mit besserer Aufloesung und integrierten Kopfhoerern.' },
+        'bild1':    { title: 'The Sword of Damocles', maker: 'Ivan Sutherland', year: '1968', text: 'Das erste VR/AR-System. Es war so schwer, dass es an der Decke befestigt werden musste, was ihm seinen bedrohlichen Namen gab.' }, 
+        'bild2':    { title: 'Sega VR', maker: 'Sega', year: '1993', text: 'Ein geplantes VR-Add-on fuer die Sega Genesis. Es wurde nie veroeffentlicht, da Sega Bedenken bezueglich Uebelkeit und Kopfschmerzen bei Testern hatte.' }, 
+        'bild3':    { title: 'Virtual Boy', maker: 'Nintendo', year: '1995', text: 'Nintendos erster Versuch einer "tragbaren" 3D-Konsole. Bekannt für das rote, monochrome Display und den kommerziellen Misserfolg.' } 
+    };
+
     // --- COMPONENTS ---
 
     AFRAME.registerComponent('debug-manager', {
@@ -70,7 +89,6 @@
 
     AFRAME.registerComponent('tour-manager', {
         init: function () {
-            // Vollständige Liste für die 'T'-Taste
             this.points = [
                 { pos: "35.83 6.80 0.06",   rot: "0 -92 0" }, { pos: "30.44 6.80 -12.19", rot: "0 -59 0" },
                 { pos: "20.59 6.80 -30.67", rot: "0 -60 0" }, { pos: "5.85 6.80 -55.37",  rot: "0 -65 0" },
@@ -94,27 +112,26 @@
         }
     });
 
-    // --- NEU: AUTO ROTATION WENN NUTZER NAH IST ---
     AFRAME.registerComponent('auto-rotate-when-near', {
         schema: {
-            triggerPos: {type: 'vec3'}, // Wo steht der Nutzer? (Position des Rings)
-            baseRot: {type: 'vec3'}     // Die "Ruhe"-Rotation (Ausrichtung zum Nutzer)
+            triggerPos: {type: 'vec3'}, 
+            baseRot: {type: 'vec3'}     
         },
         init: function () {
             this.rig = document.querySelector('#rig');
             this.isRotating = false;
         },
         tick: function (time, timeDelta) {
-            // Berechne Distanz zwischen Nutzer (Rig) und dem Auslöse-Punkt (Ring)
+            // Im AR Modus soll sich das Ding nicht automatisch drehen
+            if (this.el.sceneEl.is('ar-mode')) return;
+
             const rigPos = this.rig.getAttribute('position');
             const dist = new THREE.Vector3(rigPos.x, rigPos.y, rigPos.z).distanceTo(this.data.triggerPos);
 
-            // Wenn Nutzer nah dran ist (weniger als 2 Meter), drehen
             if (dist < 2.0) {
-                this.el.object3D.rotation.y += 0.0005 * timeDelta; // Geschwindigkeit der Drehung
+                this.el.object3D.rotation.y += 0.0005 * timeDelta; 
                 this.isRotating = true;
             } 
-            // Wenn Nutzer weggeht und es sich noch dreht -> Reset zur Startposition
             else if (this.isRotating) {
                 this.el.setAttribute('rotation', this.data.baseRot);
                 this.isRotating = false;
@@ -122,72 +139,323 @@
         }
     });
 
-    // --- VR TABLET LOGIC ---
-    AFRAME.registerComponent('vr-controller-handler', {
+    AFRAME.registerComponent('info-panel', {
+        schema: {
+            id: {type: 'string'},       
+            triggerPos: {type: 'vec3'}  
+        },
         init: function () {
-            // Tasten: Y oder B Button (Menü)
-            this.el.addEventListener('bbuttondown', this.toggleVRMap.bind(this));
-            this.el.addEventListener('ybuttondown', this.toggleVRMap.bind(this));
+            this.rig = document.querySelector('#rig');
+            this.camera = document.querySelector('[camera]');
+            this.targetVec = new THREE.Vector3(); 
+            this.panelId = this.data.id; // Speichern für AR Manager
             
+            const data = deviceContent[this.data.id]; 
+            if (!data) return; 
+
+            this.el.setAttribute('visible', false);
+            this.el.classList.add('info-panel-entity'); // Klasse für Selektor
+
+            const bg = document.createElement('a-plane');
+            bg.setAttribute('color', '#111');
+            bg.setAttribute('opacity', '0.8');
+            bg.setAttribute('width', '3.0');
+            bg.setAttribute('height', '1.6');
+            bg.setAttribute('position', '0 0 0');
+            this.el.appendChild(bg);
+
+            const title = document.createElement('a-text');
+            title.setAttribute('value', data.title);
+            title.setAttribute('color', '#ffd700');
+            title.setAttribute('align', 'center');
+            title.setAttribute('position', '0 0.6 0.01'); 
+            title.setAttribute('width', '6'); 
+            this.el.appendChild(title);
+
+            const meta = document.createElement('a-text');
+            meta.setAttribute('value', `${data.maker} | ${data.year}`);
+            meta.setAttribute('color', '#ccc');
+            meta.setAttribute('align', 'center');
+            meta.setAttribute('position', '0 0.4 0.01');
+            meta.setAttribute('width', '4');
+            this.el.appendChild(meta);
+
+            const text = document.createElement('a-text');
+            text.setAttribute('value', data.text);
+            text.setAttribute('color', 'white');
+            text.setAttribute('align', 'center');
+            text.setAttribute('position', '0 -0.1 0.01');
+            text.setAttribute('width', '2.6'); 
+            text.setAttribute('wrap-count', '32');
+            this.el.appendChild(text);
+        },
+        tick: function () {
+            // Im AR Modus steuert der Manager die Sichtbarkeit
+            if (this.el.sceneEl.is('ar-mode')) return;
+
+            const rigPos = this.rig.getAttribute('position');
+            const dist = new THREE.Vector3(rigPos.x, rigPos.y, rigPos.z).distanceTo(this.data.triggerPos);
+
+            if (dist < 2.5) {
+                if (!this.el.getAttribute('visible')) this.el.setAttribute('visible', true);
+                this.camera.object3D.getWorldPosition(this.targetVec);
+                this.el.object3D.lookAt(this.targetVec);
+            } else {
+                if (this.el.getAttribute('visible')) this.el.setAttribute('visible', false);
+            }
+        }
+    });
+
+    // --- NEU: AR MANAGER ---
+    AFRAME.registerComponent('ar-manager', {
+        init: function () {
+            this.inAR = false;
+            this.activeObject = null;
+            this.activePanel = null;
+            this.originalState = { pos: null, rot: null, parent: null };
+            this.originalPanelState = { pos: null, rot: null };
+            
+            // UI Elemente die wir verstecken müssen
+            this.museum = document.querySelector('#museum-model');
+            this.sky = document.querySelector('a-sky');
+            this.rings = document.querySelectorAll('a-ring');
+            
+            this.rig = document.querySelector('#rig');
+            this.camera = document.querySelector('[camera]');
+        },
+        toggleAR: function () {
+            if (this.inAR) {
+                this.exitAR();
+            } else {
+                this.enterAR();
+            }
+        },
+        enterAR: function () {
+            // 1. Finde das nächste Artefakt
+            const artifacts = document.querySelectorAll('.ar-artifact');
+            let closest = null;
+            let minDst = 1000;
+            const rigPos = this.rig.object3D.position;
+
+            artifacts.forEach(el => {
+                const dist = el.object3D.getWorldPosition(new THREE.Vector3()).distanceTo(rigPos);
+                if (dist < 4.0) { // Muss halbwegs nah sein
+                    if (dist < minDst) {
+                        minDst = dist;
+                        closest = el;
+                    }
+                }
+            });
+
+            if (!closest) {
+                console.log("Kein Artefakt in der Nähe für AR");
+                return;
+            }
+
+            this.inAR = true;
+            this.el.sceneEl.addState('ar-mode');
+            this.activeObject = closest;
+
+            // 2. Suche die passende Infotafel
+            // Wir nutzen die ID des Models und suchen eine Info-Panel entity mit gleicher ID in ar-id (falls wir das setzen)
+            // Einfacher: Wir suchen das InfoPanel, das gerade sichtbar ist oder am nächsten ist
+            const panels = document.querySelectorAll('.info-panel-entity');
+            let closestPanel = null;
+            let minPDst = 1000;
+            panels.forEach(p => {
+                const d = p.object3D.getWorldPosition(new THREE.Vector3()).distanceTo(rigPos);
+                if (d < minPDst) { minPDst = d; closestPanel = p; }
+            });
+            this.activePanel = closestPanel;
+
+            // 3. Status speichern
+            this.originalState.pos = closest.getAttribute('position');
+            this.originalState.rot = closest.getAttribute('rotation');
+            this.originalState.scale = closest.getAttribute('scale'); // Skalierung auch wichtig
+
+            if (this.activePanel) {
+                this.originalPanelState.pos = this.activePanel.getAttribute('position');
+                this.originalPanelState.rot = this.activePanel.getAttribute('rotation');
+            }
+
+            // 4. Welt verstecken (Passthrough aktivieren)
+            this.museum.setAttribute('visible', false);
+            this.sky.setAttribute('visible', false);
+            this.rings.forEach(r => r.setAttribute('visible', false));
+            panels.forEach(p => { if(p !== this.activePanel) p.setAttribute('visible', false); });
+            artifacts.forEach(a => { if(a !== this.activeObject) a.setAttribute('visible', false); });
+
+            // 5. Objekt vor den User holen
+            // Position relativ zur Kamera berechnen (0.5m davor)
+            const camObj = this.camera.object3D;
+            const forward = new THREE.Vector3(0, 0, -0.6).applyQuaternion(camObj.quaternion);
+            const targetPos = camObj.position.clone().add(forward);
+            // Höhe anpassen (auf Brusthöhe im echten Raum, Rig Y ist 0 im lokalen AR space oft)
+            targetPos.y = camObj.position.y; 
+
+            // Da wir im Rig sind, müssen wir lokale Koordinaten beachten.
+            // Im einfachen Fall setzen wir es in Weltkoordinaten an die errechnete Stelle.
+            // Aber Achtung: Das Rig ist verschoben.
+            // Wir machen das Objekt temporär zum Kind der Scene und setzen World Position.
+            
+            this.activeObject.object3D.position.copy(this.rig.object3D.localToWorld(targetPos.clone()));
+            this.activeObject.object3D.lookAt(this.rig.object3D.localToWorld(camObj.position.clone()));
+            
+            // Wenn es ein Bild ist (kleine Skalierung?), evtl anpassen. 
+            // Hier lassen wir Skalierung wie sie ist, da Headsets schon angepasst sind.
+            
+            // Infotafel daneben/darunter platzieren
+            if (this.activePanel) {
+                this.activePanel.setAttribute('visible', true);
+                const panelOffset = new THREE.Vector3(0, -0.4, 0); // Unter dem Objekt
+                // Wir setzen die Tafel relativ zum Objekt
+                const objWorld = this.activeObject.object3D.position.clone();
+                this.activePanel.object3D.position.copy(objWorld).add(panelOffset);
+                this.activePanel.object3D.lookAt(this.rig.object3D.localToWorld(camObj.position.clone()));
+                this.activePanel.setAttribute('scale', '0.3 0.3 0.3'); // Kleiner machen für AR
+            }
+
+            // 6. Grabbable aktivieren
+            this.activeObject.classList.add('ar-grabbable-target');
+        },
+        exitAR: function () {
+            if (!this.inAR) return;
+            this.inAR = false;
+            this.el.sceneEl.removeState('ar-mode');
+
+            // 1. Zurücksetzen
+            if (this.activeObject) {
+                this.activeObject.setAttribute('position', this.originalState.pos);
+                this.activeObject.setAttribute('rotation', this.originalState.rot);
+                this.activeObject.setAttribute('scale', this.originalState.scale);
+                this.activeObject.classList.remove('ar-grabbable-target');
+                this.activeObject.setAttribute('visible', true);
+            }
+
+            if (this.activePanel) {
+                this.activePanel.setAttribute('position', this.originalPanelState.pos);
+                this.activePanel.setAttribute('rotation', this.originalPanelState.rot);
+                this.activePanel.setAttribute('scale', '1 1 1'); // Reset scale
+                // Sichtbarkeit regelt tick wieder
+            }
+
+            // 2. Welt zeigen
+            this.museum.setAttribute('visible', true);
+            this.sky.setAttribute('visible', true);
+            this.rings.forEach(r => r.setAttribute('visible', true));
+            
+            // Alle anderen wieder sichtbar machen (Komponenten regeln das meist selbst, aber sicherheitshalber)
+            document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', true));
+
+            this.activeObject = null;
+            this.activePanel = null;
+        }
+    });
+
+    // --- NEU: GRAB LOGIK FÜR AR ---
+    AFRAME.registerComponent('ar-grab-interaction', {
+        init: function () {
+            this.grabbed = null;
+            this.el.addEventListener('triggerdown', this.onTriggerDown.bind(this));
+            this.el.addEventListener('triggerup', this.onTriggerUp.bind(this));
+        },
+        onTriggerDown: function () {
+            if (!this.el.sceneEl.is('ar-mode')) return;
+
+            // Einfacher Raycast oder Distanz-Check zum aktiven Objekt
+            const arManager = this.el.sceneEl.components['ar-manager'];
+            if (!arManager || !arManager.activeObject) return;
+
+            const objectEl = arManager.activeObject;
+            const controllerPos = this.el.object3D.getWorldPosition(new THREE.Vector3());
+            const objectPos = objectEl.object3D.getWorldPosition(new THREE.Vector3());
+
+            // Wenn Controller nah genug am Objekt ist (0.5m Toleranz)
+            if (controllerPos.distanceTo(objectPos) < 0.5) {
+                this.grabbed = objectEl;
+                // Parenting Magic: Objekt an Controller heften
+                this.el.object3D.attach(this.grabbed.object3D);
+            }
+        },
+        onTriggerUp: function () {
+            if (this.grabbed) {
+                // Zurück an die Szene heften (behält Weltposition)
+                this.el.sceneEl.object3D.attach(this.grabbed.object3D);
+                this.grabbed = null;
+            }
+        }
+    });
+
+    // --- UPDATED CONTROLLER HANDLER ---
+    AFRAME.registerComponent('vr-controller-handler', {
+        schema: {
+            hand: {type: 'string', default: 'right'} // 'left' or 'right'
+        },
+        init: function () {
+            // Y Button (Linke Hand) -> Karte
+            if (this.data.hand === 'left') {
+                this.el.addEventListener('ybuttondown', this.toggleVRMap.bind(this));
+            }
+            
+            // B Button (Rechte Hand) -> AR
+            if (this.data.hand === 'right') {
+                this.el.addEventListener('bbuttondown', this.toggleARMode.bind(this));
+            }
+
             this.mapVisible = false;
             this.tablet = document.querySelector('#vr-tablet');
         },
         toggleVRMap: function () {
-            // Im VR Modus: 3D Tablet umschalten
+            // Nur in VR (nicht AR) Karte zeigen? Oder auch in AR? Sagen wir nur VR.
+            if (this.el.sceneEl.is('ar-mode')) return;
+
             if (this.el.sceneEl.is('vr-mode')) {
                 this.mapVisible = !this.mapVisible;
-                this.tablet.setAttribute('visible', this.mapVisible);
-                
-                // Wir müssen der Klasse 'vr-clickable' sagen, ob sie interagierbar ist
+                if(this.tablet) this.tablet.setAttribute('visible', this.mapVisible);
                 const pins = document.querySelectorAll('.vr-map-pin');
                 pins.forEach(pin => {
                     if(this.mapVisible) pin.classList.add('clickable');
                     else pin.classList.remove('clickable');
                 });
             } else {
-                // Im Web Modus: HTML Overlay nutzen
+                // Web Fallback
                 if (typeof openMap === 'function') {
                     const mapOverlay = document.getElementById('map-overlay');
                     if (mapOverlay && mapOverlay.style.display === 'flex') closeMap();
                     else openMap();
                 }
             }
+        },
+        toggleARMode: function () {
+            const mgr = this.el.sceneEl.components['ar-manager'];
+            if (mgr) mgr.toggleAR();
         }
     });
 
-    // Component um Pins auf dem 3D Tablet klickbar zu machen
     AFRAME.registerComponent('vr-map-pin-click', {
-        schema: {
-            pos: {type: 'vec3'},
-            rot: {type: 'vec3'}
-        },
+        schema: { pos: {type: 'vec3'}, rot: {type: 'vec3'} },
         init: function () {
             this.el.addEventListener('click', () => {
-                // Teleport
                 const rig = document.querySelector('#rig');
                 rig.setAttribute('position', this.data.pos);
                 rig.setAttribute('rotation', this.data.rot);
-                
-                // Karte schließen nach Teleport
                 const tablet = document.querySelector('#vr-tablet');
                 tablet.setAttribute('visible', false);
-                
-                // Clickable Klasse entfernen damit man nicht aus Versehen klickt
                 const pins = document.querySelectorAll('.vr-map-pin');
                 pins.forEach(pin => pin.classList.remove('clickable'));
                 
-                // Handler status updaten (Hacky, aber funktioniert)
-                const handler = document.querySelector('[vr-controller-handler]').components['vr-controller-handler'];
-                if(handler) handler.mapVisible = false;
+                // Reset state in handler logic manually if needed or leave implicit
+                const leftHand = document.getElementById('leftHand');
+                if (leftHand && leftHand.components['vr-controller-handler']) {
+                    leftHand.components['vr-controller-handler'].mapVisible = false;
+                }
             });
-            
-            // Hover Effekte für VR Laser
             this.el.addEventListener('mouseenter', () => {
-                this.el.setAttribute('color', '#ffd700'); // Gelb
+                this.el.setAttribute('color', '#ffd700'); 
                 this.el.setAttribute('scale', '1.5 1.5 1.5');
             });
             this.el.addEventListener('mouseleave', () => {
-                this.el.setAttribute('color', '#ff3333'); // Rot zurück
+                this.el.setAttribute('color', '#ff3333'); 
                 this.el.setAttribute('scale', '1 1 1');
             });
         }
@@ -264,7 +532,7 @@
         <button class="close-map" onclick="closeMap()">Schließen</button>
     </div>
 
-    <a-scene viewer-engine debug-manager coordinate-logger tour-manager renderer="colorManagement: true; antialias: true;">
+    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true;">
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
             <img id="sky-img" src="assets/Sky.jpg">
@@ -275,40 +543,88 @@
             <a-asset-item id="hmd-quest1" src="assets/oculus_quest_vr_headset.glb"></a-asset-item>
             <a-asset-item id="hmd-quest2" src="assets/oculus_quest_2.glb"></a-asset-item>
             <a-asset-item id="hmd-quest3" src="assets/meta_quest_3.glb"></a-asset-item>
+
+            <a-asset-item id="hmd-cardboard" src="assets/googlecardboard.glb"></a-asset-item>
+            <a-asset-item id="hmd-daydream" src="assets/google_daydream.glb"></a-asset-item>
+            <a-asset-item id="hmd-hololens" src="assets/free_hololens_model__textures.glb"></a-asset-item>
+            <a-asset-item id="hmd-valve" src="assets/cgt_116_final_valve.glb"></a-asset-item>
+            <a-asset-item id="hmd-avp" src="assets/apple_vision_pro.glb"></a-asset-item>
+            <a-asset-item id="hmd-psvr" src="assets/playstation_vr.glb"></a-asset-item>
+            <a-asset-item id="hmd-vive" src="assets/htc_vive.glb"></a-asset-item>
+            <a-asset-item id="hmd-vivepro" src="assets/htc_vive_pro.glb"></a-asset-item>
         </a-assets>
 
         <a-sky src="#sky-img" rotation="0 -90 0"></a-sky>
         <a-light type="directional" intensity="2.0" position="10 20 10" castShadow="true"></a-light>
         <a-light type="ambient" intensity="0.4"></a-light>
-        <a-gltf-model src="#museum-model" position="0 0 0" apply-shadows></a-gltf-model>
+        <a-gltf-model src="#museum-model" id="museum-model" position="0 0 0" apply-shadows></a-gltf-model>
 
-        <a-gltf-model src="#hmd-rift-cv1" 
-                      position="41.63 5.50 0.41" 
-                      rotation="0 989 0" 
-                      scale="0.25 0.25 0.25" 
-                      apply-shadows
+        <a-gltf-model src="#hmd-rift-cv1" class="ar-artifact"
+                      position="41.63 5.50 0.41" rotation="0 989 0" scale="0.25 0.25 0.25" apply-shadows
                       auto-rotate-when-near="triggerPos: 35.83 6.80 0.06; baseRot: 0 989 0"></a-gltf-model>
+        <a-entity info-panel="id: rift-cv1; triggerPos: 35.83 6.80 0.06" position="41.63 8.2 0.41"></a-entity>
         
-        <a-gltf-model src="#hmd-quest1" 
-                      position="35.5 5.50 -14.9" 
-                      rotation="0 1022 0" 
-                      scale="9.5 9.5 9.5" 
-                      apply-shadows
+        <a-gltf-model src="#hmd-quest1" class="ar-artifact"
+                      position="35.5 5.50 -14.9" rotation="0 1022 0" scale="10 10 10" apply-shadows
                       auto-rotate-when-near="triggerPos: 30.44 6.80 -12.19; baseRot: 0 1022 0"></a-gltf-model>
+        <a-entity info-panel="id: quest1; triggerPos: 30.44 6.80 -12.19" position="35.5 8.2 -14.9"></a-entity>
         
-        <a-gltf-model src="#hmd-quest2" 
-                      position="25.3 5.50 -33.0" 
-                      rotation="0 1021 0" 
-                      scale="3 3 3" 
-                      apply-shadows
+        <a-gltf-model src="#hmd-quest2" class="ar-artifact"
+                      position="25.3 5.50 -33.0" rotation="0 1021 0" scale="3 3 3" apply-shadows
                       auto-rotate-when-near="triggerPos: 20.59 6.80 -30.67; baseRot: 0 1021 0"></a-gltf-model>
+        <a-entity info-panel="id: quest2; triggerPos: 20.59 6.80 -30.67" position="25.3 8.2 -33.0"></a-entity>
         
-        <a-gltf-model src="#hmd-quest3" 
-                      position="11.76 5.80 -58.25" 
-                      rotation="0 1019 0" 
-                      scale="5 5 5" 
-                      apply-shadows
+        <a-gltf-model src="#hmd-quest3" class="ar-artifact"
+                      position="11.76 5.80 -58.25" rotation="0 1019 0" scale="5 5 5" apply-shadows
                       auto-rotate-when-near="triggerPos: 5.85 6.80 -55.37; baseRot: 0 1019 0"></a-gltf-model>
+        <a-entity info-panel="id: quest3; triggerPos: 5.85 6.80 -55.37" position="11.76 8.5 -58.25"></a-entity>
+
+        <a-gltf-model src="#hmd-cardboard" class="ar-artifact"
+                      position="-48.22 5.50 -5.79" rotation="0 82 0" scale="0.01 0.01 0.01" apply-shadows
+                      auto-rotate-when-near="triggerPos: -42.84 6.80 -5.14; baseRot: 0 82 0"></a-gltf-model>
+        <a-entity info-panel="id: cardboard; triggerPos: -42.84 6.80 -5.14" position="-48.22 8.2 -5.79"></a-entity>
+
+        <a-gltf-model src="#hmd-daydream" class="ar-artifact"
+                      position="-47.43 5.50 26.64" rotation="0 460 0" scale="3.5 3.5 3.5" apply-shadows
+                      auto-rotate-when-near="triggerPos: -41.47 6.80 26.00; baseRot: 0 460 0"></a-gltf-model>
+        <a-entity info-panel="id: daydream; triggerPos: -41.47 6.80 26.00" position="-47.43 8.2 26.64"></a-entity>
+
+        <a-gltf-model src="#hmd-hololens" class="ar-artifact"
+                      position="-39.28 5.50 53.26" rotation="0 474 0" scale="0.025 0.025 0.025" apply-shadows
+                      auto-rotate-when-near="triggerPos: -33.14 6.80 50.55; baseRot: 0 474 0"></a-gltf-model>
+        <a-entity info-panel="id: hololens; triggerPos: -33.14 6.80 50.55" position="-39.28 8.2 53.26"></a-entity>
+
+        <a-entity info-panel="id: bild1; triggerPos: -28.62 6.80 -31.76" position="-28.62 4.5 -36.0"></a-entity>
+
+        <a-gltf-model src="#hmd-valve" class="ar-artifact"
+                      position="41.99 21.30 0.41" rotation="0 628 0" scale="4 4 4" apply-shadows
+                      auto-rotate-when-near="triggerPos: 36.25 22.60 0.18; baseRot: 0 628 0"></a-gltf-model>
+        <a-entity info-panel="id: valve; triggerPos: 36.25 22.60 0.18" position="41.99 24.0 0.41"></a-entity>
+
+        <a-gltf-model src="#hmd-avp" class="ar-artifact"
+                      position="36.22 21.50 -15.72" rotation="0 658 0" scale="12 12 12" apply-shadows
+                      auto-rotate-when-near="triggerPos: 31.13 22.60 -12.43; baseRot: 0 658 0"></a-gltf-model>
+        <a-entity info-panel="id: avp; triggerPos: 31.13 22.60 -12.43" position="36.22 24.2 -15.72"></a-entity>
+
+        <a-gltf-model src="#hmd-psvr" class="ar-artifact"
+                      position="26.37 21.30 -33.87" rotation="0 663 0" scale="0.25 0.25 0.25" apply-shadows
+                      auto-rotate-when-near="triggerPos: 20.83 22.60 -30.48; baseRot: 0 663 0"></a-gltf-model>
+        <a-entity info-panel="id: psvr; triggerPos: 20.83 22.60 -30.48" position="26.37 24.0 -33.87"></a-entity>
+
+        <a-gltf-model src="#hmd-vive" class="ar-artifact"
+                      position="12.54 21.30 -13.31" rotation="0 860 0" scale="2 2 2" apply-shadows
+                      auto-rotate-when-near="triggerPos: 16.56 22.60 -18.06; baseRot: 0 860 0"></a-gltf-model>
+        <a-entity info-panel="id: vive; triggerPos: 16.56 22.60 -18.06" position="12.54 24.0 -13.31"></a-entity>
+
+        <a-gltf-model src="#hmd-vivepro" class="ar-artifact"
+                      position="-20.35 21.30 -13.21" rotation="0 936 0" scale="1 1 1" apply-shadows
+                      auto-rotate-when-near="triggerPos: -23.82 22.60 -17.73; baseRot: 0 936 0"></a-gltf-model>
+        <a-entity info-panel="id: vivepro; triggerPos: -23.82 22.60 -17.73" position="-20.35 24.0 -13.21"></a-entity>
+
+        <a-entity info-panel="id: bild2; triggerPos: 7.93 22.60 -52.46" position="13.0 19.5 -55.0"></a-entity>
+
+        <a-entity info-panel="id: bild3; triggerPos: -40.87 22.60 -4.57" position="-45.5 19.5 -4.57"></a-entity>
+
 
         <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="35.83 5.22 0.06" rotation="-90 0 0" class="clickable" teleport-to="pos: 35.83 6.80 0.06; rot: 0 -92 0"></a-ring>
         <a-ring color="yellow" radius-inner="0.15" radius-outer="0.2" position="30.44 5.22 -12.19" rotation="-90 0 0" class="clickable" teleport-to="pos: 30.44 6.80 -12.19; rot: 0 -59 0"></a-ring>
@@ -318,16 +634,15 @@
                 <a-cursor color="yellow" raycaster="objects: .clickable"></a-cursor>
             </a-entity>
 
-            <a-entity id="leftHand" laser-controls="hand: left" raycaster="objects: .clickable; far: 10" vr-controller-handler>
+            <a-entity id="leftHand" laser-controls="hand: left" 
+                      raycaster="objects: .clickable, .vr-map-pin; far: 10" 
+                      vr-controller-handler="hand: left"
+                      ar-grab-interaction>
                 
                 <a-entity id="vr-tablet" visible="false" position="0.1 0.05 -0.15" rotation="-45 90 0" scale="0.3 0.3 0.3">
-                    
                     <a-box width="1.05" height="0.65" depth="0.01" color="#222" position="0 0 -0.01"></a-box>
-                    
                     <a-plane id="vr-map-plane" src="#map-eg-tex" width="1.0" height="0.5625" position="0 0 0" shader="flat"></a-plane>
-                    
                     <a-entity id="vr-pins-container" position="-0.5 0.28125 0.01"></a-entity>
-
                     <a-entity position="0 -0.35 0">
                         <a-box class="vr-map-pin clickable" color="#444" width="0.4" height="0.1" depth="0.02" position="-0.25 0 0"
                                event-set__enter="_event: mouseenter; color: #ffd700" 
@@ -345,7 +660,10 @@
                 </a-entity>
             </a-entity>
 
-            <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable, .vr-map-pin; far: 10" vr-controller-handler></a-entity>
+            <a-entity id="rightHand" laser-controls="hand: right" 
+                      raycaster="objects: .clickable, .vr-map-pin; far: 10" 
+                      vr-controller-handler="hand: right"
+                      ar-grab-interaction></a-entity>
         </a-entity>
     </a-scene>
 
@@ -490,4 +808,4 @@
         }
     </script>
 </body>
-</html>"
+</html>
