@@ -68,7 +68,6 @@
                     console.log("Debug Mode:", this.isDebug);
                 }
                 
-                // AR Toggle Simulation mit 'B' (nur wenn Debug an ist)
                 if (this.isDebug && e.key.toLowerCase() === 'b') {
                     console.log("Simulating AR Toggle via Keyboard");
                     const arMgr = this.el.sceneEl.components['ar-manager'];
@@ -212,7 +211,7 @@
         }
     });
 
-    // --- AGGRESSIVE AR MANAGER (FIX: ALPHA + UNLIMITED RADIUS) ---
+    // --- AGGRESSIVE AR MANAGER (FIX: KILL BACKGROUND & ENVIRONMENT) ---
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -252,18 +251,25 @@
             }
         },
         enterAR: function () {
-            // --- 1. ALLES VERSTECKEN & HINTERGRUND TRANSPARENT MACHEN ---
+            // --- 1. ALLES VERSTECKEN & HINTERGRUND ZERSTÖREN ---
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
+            const sceneEl = this.el.sceneEl;
+
+            // WICHTIG: Das Hintergrund-Attribut komplett entfernen
+            sceneEl.removeAttribute('background');
             
-            // WICHTIG: Renderer Hintergrund auf Transparent setzen (Passthrough Fix)
-            if (this.el.sceneEl.renderer) {
-                // Setze ClearColor auf Schwarz mit 0 Alpha (voll transparent)
-                this.el.sceneEl.renderer.setClearColor(0x000000, 0); 
+            // Three.js Background & Environment auf null setzen (Zwingend für Passthrough!)
+            if (sceneEl.object3D) {
+                sceneEl.object3D.background = null;
+                sceneEl.object3D.environment = null;
             }
-            // Hintergrund Komponente von A-Frame leeren
-            this.el.sceneEl.setAttribute('background', 'color: transparent');
+            
+            // Clear Color des Renderers auf Transparent setzen
+            if (sceneEl.renderer) {
+                sceneEl.renderer.setClearColor(0x000000, 0); 
+            }
 
             if(museum) {
                 const s = museum.getAttribute('scale');
@@ -288,15 +294,11 @@
                 sky.setAttribute('scale', '0 0 0');
             }
             rings.forEach(r => r.setAttribute('visible', false));
-            
-            // Environment und Background löschen
-            if (this.el.sceneEl.object3D.background) this.el.sceneEl.object3D.background = null; 
-            if (this.el.sceneEl.object3D.environment) this.el.sceneEl.object3D.environment = null;
 
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN (RADIUS LIMIT ENTFERNT) ---
+            // --- 2. NÄCHSTES OBJEKT FINDEN ---
             let closest = null;
             let minDst = 999999; 
             const camWorldPos = new THREE.Vector3();
@@ -310,7 +312,6 @@
                 }
             });
 
-            // Fallback
             if (!closest) {
                 const allArtifacts = document.querySelectorAll('.ar-artifact');
                 if (allArtifacts.length > 0) closest = allArtifacts[0];
@@ -427,10 +428,13 @@
             }
             rings.forEach(r => r.setAttribute('visible', true));
             
+            // Environment wiederherstellen
             if (this.skyTexture) {
                 this.el.sceneEl.object3D.environment = this.skyTexture;
                 this.el.sceneEl.object3D.environmentIntensity = 0.8;
             }
+            // Hintergrund auf Schwarz zurücksetzen (oder was gewünscht ist)
+            // this.el.sceneEl.setAttribute('background', 'color: black'); 
             
             document.querySelectorAll('.ar-artifact').forEach(a => {
                 a.setAttribute('visible', true);
@@ -616,7 +620,7 @@
     <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager 
              background="color: transparent"
              renderer="colorManagement: true; antialias: true; alpha: true" 
-             webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
+             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, immersive-ar; overlayElement: #map-overlay; requiredFeatures: local-floor">
         
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
