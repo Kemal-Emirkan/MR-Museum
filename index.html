@@ -252,15 +252,18 @@
             }
         },
         enterAR: function () {
-            // --- 1. ALLES VERSTECKEN ---
+            // --- 1. ALLES VERSTECKEN & HINTERGRUND TRANSPARENT MACHEN ---
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             
-            // WICHTIG: Hintergrund transparent machen für Passthrough
+            // WICHTIG: Renderer Hintergrund auf Transparent setzen (Passthrough Fix)
             if (this.el.sceneEl.renderer) {
-                this.el.sceneEl.renderer.setClearColor(0x000000, 0); // Transparent
+                // Setze ClearColor auf Schwarz mit 0 Alpha (voll transparent)
+                this.el.sceneEl.renderer.setClearColor(0x000000, 0); 
             }
+            // Hintergrund Komponente von A-Frame leeren
+            this.el.sceneEl.setAttribute('background', 'color: transparent');
 
             if(museum) {
                 const s = museum.getAttribute('scale');
@@ -286,19 +289,19 @@
             }
             rings.forEach(r => r.setAttribute('visible', false));
             
+            // Environment und Background löschen
             if (this.el.sceneEl.object3D.background) this.el.sceneEl.object3D.background = null; 
             if (this.el.sceneEl.object3D.environment) this.el.sceneEl.object3D.environment = null;
 
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN (FIX: RADIUS LIMIT ENTFERNT) ---
+            // --- 2. NÄCHSTES OBJEKT FINDEN (RADIUS LIMIT ENTFERNT) ---
             let closest = null;
-            let minDst = 999999; // Sehr hohe Zahl
+            let minDst = 999999; 
             const camWorldPos = new THREE.Vector3();
             this.camera.object3D.getWorldPosition(camWorldPos);
 
-            // Wir suchen einfach das NÄCHSTE Objekt, egal wie weit weg
             document.querySelectorAll('.ar-artifact').forEach(el => {
                 const dist = el.object3D.getWorldPosition(new THREE.Vector3()).distanceTo(camWorldPos);
                 if (dist < minDst) {
@@ -307,7 +310,7 @@
                 }
             });
 
-            // Sollte eigentlich nicht passieren, aber als Fallback
+            // Fallback
             if (!closest) {
                 const allArtifacts = document.querySelectorAll('.ar-artifact');
                 if (allArtifacts.length > 0) closest = allArtifacts[0];
@@ -610,7 +613,11 @@
         <button class="close-map" onclick="closeMap()">Schließen</button>
     </div>
 
-    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true; alpha: true" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
+    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager 
+             background="color: transparent"
+             renderer="colorManagement: true; antialias: true; alpha: true" 
+             webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
+        
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
             <img id="sky-img" src="assets/Sky.jpg">
