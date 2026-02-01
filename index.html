@@ -212,7 +212,7 @@
         }
     });
 
-    // --- AGGRESSIVE AR MANAGER (ID FIX + SCALE HACK + DISTANCE FIX) ---
+    // --- AGGRESSIVE AR MANAGER (FIX: ALPHA + UNLIMITED RADIUS) ---
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -222,7 +222,7 @@
             this.originalPanelState = { pos: null, rot: null, scale: null };
             this.museumOriginalScale = {x: 1, y: 1, z: 1}; 
             
-            // Cooldown für VR Button, damit er nicht prellt/flackert
+            // Cooldown für VR Button
             this.lastToggleTime = 0;
 
             // Referenzen
@@ -238,7 +238,6 @@
             });
         },
         toggleAR: function () {
-            // Debounce Check (Verhindert doppeltes Feuern in VR)
             const now = Date.now();
             if (now - this.lastToggleTime < 500) {
                 return;
@@ -258,6 +257,11 @@
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             
+            // WICHTIG: Hintergrund transparent machen für Passthrough
+            if (this.el.sceneEl.renderer) {
+                this.el.sceneEl.renderer.setClearColor(0x000000, 0); // Transparent
+            }
+
             if(museum) {
                 const s = museum.getAttribute('scale');
                 if (s) {
@@ -270,7 +274,6 @@
                 if(museum.object3D) {
                     museum.object3D.visible = false;
                     museum.object3D.scale.set(0, 0, 0);
-                    // Auch alle Kinder unsichtbar schalten
                     museum.object3D.traverse((node) => {
                         node.visible = false;
                     });
@@ -289,24 +292,22 @@
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN (FIX: RADIUS ERHÖHT) ---
+            // --- 2. NÄCHSTES OBJEKT FINDEN (FIX: RADIUS LIMIT ENTFERNT) ---
             let closest = null;
-            let minDst = 1000; 
+            let minDst = 999999; // Sehr hohe Zahl
             const camWorldPos = new THREE.Vector3();
             this.camera.object3D.getWorldPosition(camWorldPos);
 
-            // Radius drastisch erhöht (auf 50), damit in VR immer etwas gefunden wird
+            // Wir suchen einfach das NÄCHSTE Objekt, egal wie weit weg
             document.querySelectorAll('.ar-artifact').forEach(el => {
                 const dist = el.object3D.getWorldPosition(new THREE.Vector3()).distanceTo(camWorldPos);
-                if (dist < 50.0) {  
-                    if (dist < minDst) {
-                        minDst = dist;
-                        closest = el;
-                    }
+                if (dist < minDst) {
+                    minDst = dist;
+                    closest = el;
                 }
             });
 
-            // Fallback: Wenn trotzdem nichts gefunden wird (sollte nicht passieren), nimm das erste
+            // Sollte eigentlich nicht passieren, aber als Fallback
             if (!closest) {
                 const allArtifacts = document.querySelectorAll('.ar-artifact');
                 if (allArtifacts.length > 0) closest = allArtifacts[0];
@@ -406,7 +407,6 @@
 
                 if(museum.object3D) {
                     museum.object3D.visible = true;
-                    // FIX: Alle Kinder auch wieder sichtbar machen
                     museum.object3D.traverse((node) => {
                         node.visible = true;
                     });
@@ -610,7 +610,7 @@
         <button class="close-map" onclick="closeMap()">Schließen</button>
     </div>
 
-    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true;" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
+    <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager renderer="colorManagement: true; antialias: true; alpha: true" webxr="optionalFeatures: hit-test, local-floor, dom-overlay; overlayElement: #map-overlay; requiredFeatures: local-floor">
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
             <img id="sky-img" src="assets/Sky.jpg">
