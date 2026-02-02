@@ -211,7 +211,7 @@
         }
     });
 
-    // --- AGGRESSIVE AR MANAGER (FIX: START AS AR BUT SHOW VR CONTENT) ---
+    // --- AGGRESSIVE AR MANAGER (Performance Optimized: VR Default, AR on Demand) ---
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -220,27 +220,28 @@
             this.originalState = { pos: null, rot: null, scale: null };
             this.originalPanelState = { pos: null, rot: null, scale: null };
             this.museumOriginalScale = {x: 1, y: 1, z: 1}; 
-            
-            // Cooldown für VR Button
             this.lastToggleTime = 0;
 
-            // Referenzen
             this.rig = document.querySelector('#rig');
             this.camera = document.querySelector('[camera]');
             
-            // Texture Loader für Reset
+            // Textur laden
             this.skyTexture = null;
             new THREE.TextureLoader().load('assets/Sky.jpg', (texture) => {
                 texture.mapping = THREE.EquirectangularReflectionMapping;
                 texture.colorSpace = THREE.SRGBColorSpace;
                 this.skyTexture = texture;
+                
+                // INITIAL: Stelle sicher, dass Skybox sichtbar ist 
+                if (this.el.sceneEl.object3D) {
+                    this.el.sceneEl.object3D.environment = this.skyTexture;
+                    this.el.sceneEl.object3D.environmentIntensity = 0.8;
+                }
             });
         },
         toggleAR: function () {
             const now = Date.now();
-            if (now - this.lastToggleTime < 500) {
-                return;
-            }
+            if (now - this.lastToggleTime < 500) return;
             this.lastToggleTime = now;
 
             console.log("AR Toggle Triggered");
@@ -251,54 +252,45 @@
             }
         },
         enterAR: function () {
-            // --- 1. MUSEUM VERSTECKEN & HINTERGRUND ZERSTÖREN ---
+            // --- ARTEFAKT MODUS STARTEN ---
+            // Ziel: Kamera sichtbar machen (Hintergrund löschen)
+            
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             const sceneEl = this.el.sceneEl;
 
-            // WICHTIG: Das Hintergrund-Attribut komplett entfernen für Passthrough
+            // 1. Hintergrund komplett transparent machen für Passthrough
+            // Da wir "passthrough" in optionalFeatures haben, aktiviert die Quest die Kameras
+            // sobald der Hintergrund transparent ist.
             sceneEl.removeAttribute('background');
-            
-            // Three.js Background & Environment auf null setzen
+            if (sceneEl.renderer) sceneEl.renderer.setClearColor(0x000000, 0); 
             if (sceneEl.object3D) {
                 sceneEl.object3D.background = null;
-                sceneEl.object3D.environment = null;
-            }
-            
-            // Clear Color des Renderers auf Transparent setzen
-            if (sceneEl.renderer) {
-                sceneEl.renderer.setClearColor(0x000000, 0); 
+                sceneEl.object3D.environment = null; // Entfernt Reflexionen
             }
 
+            // 2. Museum & Skybox ausblenden
             if(museum) {
                 const s = museum.getAttribute('scale');
-                if (s) {
-                    this.museumOriginalScale = {x: s.x, y: s.y, z: s.z};
-                }
-
+                if (s) this.museumOriginalScale = {x: s.x, y: s.y, z: s.z};
                 museum.setAttribute('scale', '0 0 0');
                 museum.setAttribute('visible', false);
-                
-                if(museum.object3D) {
-                    museum.object3D.visible = false;
-                    museum.object3D.scale.set(0, 0, 0);
-                    museum.object3D.traverse((node) => {
-                        node.visible = false;
-                    });
-                }
             }
 
+            // WICHTIG: Skybox ausblenden
             if(sky) {
                 sky.setAttribute('visible', false);
-                sky.setAttribute('scale', '0 0 0');
             }
             rings.forEach(r => r.setAttribute('visible', false));
 
+            // Info-Tafeln ausblenden
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
+            
+            // Alle Artefakte erst ausblenden...
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN ---
+            // ... dann das nächste finden
             let closest = null;
             let minDst = 999999; 
             const camWorldPos = new THREE.Vector3();
@@ -318,7 +310,7 @@
             }
 
             if (!closest) {
-                console.warn("Kein Artefakt gefunden. Abbruch.");
+                console.warn("Kein Artefakt gefunden.");
                 this.exitAR(); 
                 return;
             }
@@ -327,7 +319,7 @@
             this.el.sceneEl.addState('ar-mode');
             this.activeObject = closest;
 
-            // --- 3. STATUS SICHERN ---
+            // Zustand speichern
             const oldPos = closest.getAttribute('position');
             const oldRot = closest.getAttribute('rotation');
             const oldScale = closest.getAttribute('scale');
@@ -336,7 +328,7 @@
             this.originalState.rot = {x: oldRot.x, y: oldRot.y, z: oldRot.z};
             this.originalState.scale = {x: oldScale.x, y: oldScale.y, z: oldScale.z};
 
-            // --- 4. PANEL FINDEN ---
+            // Panel finden
             const panels = document.querySelectorAll('.info-panel-entity');
             let closestPanel = null;
             let minPDst = 1000;
@@ -355,7 +347,7 @@
                 this.originalPanelState.scale = {x: pScale.x, y: pScale.y, z: pScale.z};
             }
 
-            // --- 5. POSITIONIERUNG ---
+            // Positionieren
             this.activeObject.setAttribute('visible', true);
             if(this.activeObject.object3D) this.activeObject.object3D.visible = true;
             
@@ -382,10 +374,11 @@
             this.activeObject.classList.add('ar-grabbable-target');
         },
         exitAR: function () {
+            // --- ZURÜCK ZUM VIRTUELLEN MUSEUM ---
             this.inAR = false;
             this.el.sceneEl.removeState('ar-mode');
 
-            // --- 1. ARTEFAKT ZURÜCKSETZEN ---
+            // 1. Objekt zurücksetzen
             if (this.activeObject) {
                 this.activeObject.setAttribute('position', this.originalState.pos);
                 this.activeObject.setAttribute('rotation', this.originalState.rot);
@@ -400,7 +393,7 @@
                 this.activePanel.setAttribute('scale', this.originalPanelState.scale); 
             }
 
-            // --- 2. WELT WIEDERHERSTELLEN ---
+            // 2. Museum wiederherstellen
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
@@ -408,28 +401,23 @@
             if(museum) {
                 museum.setAttribute('visible', true);
                 museum.setAttribute('scale', this.museumOriginalScale);
-
                 if(museum.object3D) {
                     museum.object3D.visible = true;
-                    museum.object3D.traverse((node) => {
-                        node.visible = true;
-                    });
-                    museum.object3D.scale.set(
-                        this.museumOriginalScale.x, 
-                        this.museumOriginalScale.y, 
-                        this.museumOriginalScale.z
-                    );
+                    museum.object3D.traverse((node) => { node.visible = true; });
+                    museum.object3D.scale.set(this.museumOriginalScale.x, this.museumOriginalScale.y, this.museumOriginalScale.z);
                 }
             }
 
+            // WICHTIG: Skybox wieder EINSCHALTEN. 
+            // Die Quest schaltet die Kameras automatisch ab, wenn das Bild deckend ist.
             if(sky) {
                 sky.setAttribute('visible', true);
                 sky.setAttribute('scale', '1 1 1');
             }
             rings.forEach(r => r.setAttribute('visible', true));
             
-            // Environment wiederherstellen
-            if (this.skyTexture) {
+            // Environment Textur wiederherstellen
+            if (this.skyTexture && this.el.sceneEl.object3D) {
                 this.el.sceneEl.object3D.environment = this.skyTexture;
                 this.el.sceneEl.object3D.environmentIntensity = 0.8;
             }
@@ -493,22 +481,20 @@
             this.tablet = document.querySelector('#vr-tablet');
         },
         toggleVRMap: function () {
-            if (this.el.sceneEl.is('ar-mode')) return;
-            if (this.el.sceneEl.is('vr-mode')) {
-                this.mapVisible = !this.mapVisible;
-                if(this.tablet) this.tablet.setAttribute('visible', this.mapVisible);
-                const pins = document.querySelectorAll('.vr-map-pin');
-                pins.forEach(pin => {
-                    if(this.mapVisible) pin.classList.add('clickable');
-                    else pin.classList.remove('clickable');
-                });
-            } else {
-                if (typeof openMap === 'function') {
-                    const mapOverlay = document.getElementById('map-overlay');
-                    if (mapOverlay && mapOverlay.style.display === 'flex') closeMap();
-                    else openMap();
-                }
+            // FIX: Karte geht jetzt immer, solange wir NICHT im Artefakt-Betrachtungs-Modus sind
+            // Egal ob technisch "VR" oder "AR"
+            if (this.el.sceneEl.is('ar-mode')) {
+                console.log("Map blockiert wegen AR-Mode");
+                return;
             }
+
+            this.mapVisible = !this.mapVisible;
+            if(this.tablet) this.tablet.setAttribute('visible', this.mapVisible);
+            const pins = document.querySelectorAll('.vr-map-pin');
+            pins.forEach(pin => {
+                if(this.mapVisible) pin.classList.add('clickable');
+                else pin.classList.remove('clickable');
+            });
         },
         toggleARMode: function () {
             const mgr = this.el.sceneEl.components['ar-manager'];
@@ -618,7 +604,7 @@
     <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager 
              background="color: transparent"
              renderer="colorManagement: true; antialias: true; alpha: true" 
-             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, immersive-ar, passthrough; overlayElement: #map-overlay; requiredFeatures: local-floor">
+             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, passthrough; overlayElement: #map-overlay; requiredFeatures: local-floor">
         
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
@@ -642,6 +628,7 @@
         </a-assets>
 
         <a-sky src="#sky-img" rotation="0 -90 0"></a-sky>
+        
         <a-light type="directional" intensity="2.0" position="10 20 10" castShadow="true"></a-light>
         <a-light type="ambient" intensity="0.4"></a-light>
         
@@ -811,9 +798,9 @@
         document.getElementById('btn-web').addEventListener('click', startGame);
         document.getElementById('btn-vr').addEventListener('click', () => {
             startGame();
-            // WICHTIG: Wir rufen enterAR() auf, NICHT enterVR().
-            // Das triggert die Permission-Abfrage für die Kamera/Raumdaten.
-            scene.enterAR();
+            // WICHTIG: Wir rufen enterVR() auf, NICHT enterAR().
+            // Aber wir haben "passthrough" in den optionalFeatures angefordert.
+            scene.enterVR();
         });
 
         // --- WEB MAP FUNKTIONEN ---
