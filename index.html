@@ -67,7 +67,6 @@
                     else this.el.sceneEl.removeState('debug');
                     console.log("Debug Mode:", this.isDebug);
                 }
-                
                 if (this.isDebug && e.key.toLowerCase() === 'b') {
                     const arMgr = this.el.sceneEl.components['ar-manager'];
                     if (arMgr) arMgr.toggleAR();
@@ -230,6 +229,7 @@
                 texture.colorSpace = THREE.SRGBColorSpace;
                 this.skyTexture = texture;
                 
+                // Initial: Environment setzen
                 if (this.el.sceneEl.object3D) {
                     this.el.sceneEl.object3D.environment = this.skyTexture;
                     this.el.sceneEl.object3D.environmentIntensity = 0.8;
@@ -249,14 +249,14 @@
         },
         enterAR: function () {
             // --- IN AR MODUS WECHSELN ---
-            // Ziel: Wir machen "Löcher" in die VR Welt, damit Passthrough sichtbar wird
+            // Ziel: Hintergrund löschen -> Passthrough wird sichtbar
             
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             const sceneEl = this.el.sceneEl;
 
-            // 1. HINTERGRUND TRANSPARENT (Damit Passthrough sichtbar wird)
+            // 1. HINTERGRUND TRANSPARENT
             sceneEl.removeAttribute('background');
             if (sceneEl.renderer) sceneEl.renderer.setClearColor(0x000000, 0); 
             if (sceneEl.object3D) {
@@ -319,7 +319,6 @@
             this.originalState.rot = {x: oldRot.x, y: oldRot.y, z: oldRot.z};
             this.originalState.scale = {x: oldScale.x, y: oldScale.y, z: oldScale.z};
 
-            // Panel holen
             const panels = document.querySelectorAll('.info-panel-entity');
             let closestPanel = null;
             let minPDst = 1000;
@@ -396,7 +395,9 @@
                 }
             }
 
-            // 1. SKYBOX WIEDER AN (Passthrough wird dadurch verdeckt und geht in Standby)
+            // HINTERGRUND & SKYBOX WIEDERHERSTELLEN
+            this.el.sceneEl.setAttribute('background', 'color: black'); // WICHTIG!
+            
             if(sky) {
                 sky.setAttribute('visible', true);
                 sky.setAttribute('scale', '1 1 1');
@@ -466,7 +467,7 @@
             this.tablet = document.querySelector('#vr-tablet');
         },
         toggleVRMap: function () {
-            if (this.el.sceneEl.is('ar-mode')) return; // Karte nur in VR
+            if (this.el.sceneEl.is('ar-mode')) return; 
 
             this.mapVisible = !this.mapVisible;
             if(this.tablet) this.tablet.setAttribute('visible', this.mapVisible);
@@ -582,9 +583,9 @@
     </div>
 
     <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager 
-             background="color: transparent"
+             background="color: black"
              renderer="colorManagement: true; antialias: true; alpha: true" 
-             webxr="requiredFeatures: passthrough, local-floor; optionalFeatures: hit-test, dom-overlay; overlayElement: #map-overlay;">
+             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, passthrough; overlayElement: #map-overlay; requiredFeatures: local-floor">
         
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
