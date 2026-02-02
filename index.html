@@ -33,7 +33,7 @@
     </style>
 
     <script>
-    // --- DATENBANK FÜR INFO TEXTE ---
+    // INFO TEXTE
     const deviceContent = {
         'rift-cv1': { title: 'Oculus Rift CV1', maker: 'Oculus VR (Facebook)', year: '2016', text: 'Die erste kommerzielle Version der Oculus Rift. Sie markierte den Beginn der modernen VR-Aera für Konsumenten.' },
         'quest1':   { title: 'Oculus Quest', maker: 'Oculus (Meta)', year: '2019', text: 'Das erste autarke 6DOF-Headset, das keine Kabel oder externen Sensoren mehr benoetigte.' },
@@ -52,7 +52,7 @@
         'bild3':    { title: 'Virtual Boy', maker: 'Nintendo', year: '1995', text: 'Nintendos erster Versuch einer "tragbaren" 3D-Konsole. Bekannt für das rote, monochrome Display und den kommerziellen Misserfolg.' } 
     };
 
-    // --- COMPONENTS ---
+    // Komponenten
 
     AFRAME.registerComponent('debug-manager', {
         init: function () {
@@ -211,7 +211,7 @@
         }
     });
 
-    // --- AGGRESSIVE AR MANAGER (FIX: START AS AR BUT SHOW VR CONTENT) ---
+    // AR MANAGER
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -224,7 +224,6 @@
             // Cooldown für VR Button
             this.lastToggleTime = 0;
 
-            // Referenzen
             this.rig = document.querySelector('#rig');
             this.camera = document.querySelector('[camera]');
             
@@ -251,22 +250,22 @@
             }
         },
         enterAR: function () {
-            // --- 1. MUSEUM VERSTECKEN & HINTERGRUND ZERSTÖREN ---
+            // MUSEUM VERSTECKEN & HINTERGRUND VERSCHWINDEN LASSEN
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             const sceneEl = this.el.sceneEl;
 
-            // WICHTIG: Das Hintergrund-Attribut komplett entfernen für Passthrough
+            // Das Hintergrund komplett entfernen für Passthrough
             sceneEl.removeAttribute('background');
             
-            // Three.js Background & Environment auf null setzen
+            // Background & Environment auf null setzen
             if (sceneEl.object3D) {
                 sceneEl.object3D.background = null;
                 sceneEl.object3D.environment = null;
             }
             
-            // Clear Color des Renderers auf Transparent setzen
+            // Renderers auf Transparent setzen
             if (sceneEl.renderer) {
                 sceneEl.renderer.setClearColor(0x000000, 0); 
             }
@@ -298,7 +297,7 @@
             document.querySelectorAll('.info-panel-entity').forEach(p => p.setAttribute('visible', false));
             document.querySelectorAll('.ar-artifact').forEach(a => a.setAttribute('visible', false));
 
-            // --- 2. NÄCHSTES OBJEKT FINDEN ---
+            // AUSTELLUNGSSTÜCK IN DER NÄHE FINDEN
             let closest = null;
             let minDst = 999999; 
             const camWorldPos = new THREE.Vector3();
@@ -327,7 +326,7 @@
             this.el.sceneEl.addState('ar-mode');
             this.activeObject = closest;
 
-            // --- 3. STATUS SICHERN ---
+            // STAND SICHERN
             const oldPos = closest.getAttribute('position');
             const oldRot = closest.getAttribute('rotation');
             const oldScale = closest.getAttribute('scale');
@@ -336,7 +335,7 @@
             this.originalState.rot = {x: oldRot.x, y: oldRot.y, z: oldRot.z};
             this.originalState.scale = {x: oldScale.x, y: oldScale.y, z: oldScale.z};
 
-            // --- 4. PANEL FINDEN ---
+            // INFOTAFEL FINDEN
             const panels = document.querySelectorAll('.info-panel-entity');
             let closestPanel = null;
             let minPDst = 1000;
@@ -355,7 +354,7 @@
                 this.originalPanelState.scale = {x: pScale.x, y: pScale.y, z: pScale.z};
             }
 
-            // --- 5. POSITIONIERUNG ---
+            // POSITIONIERUNG
             this.activeObject.setAttribute('visible', true);
             if(this.activeObject.object3D) this.activeObject.object3D.visible = true;
             
@@ -385,7 +384,7 @@
             this.inAR = false;
             this.el.sceneEl.removeState('ar-mode');
 
-            // --- 1. ARTEFAKT ZURÜCKSETZEN ---
+            // OBJEKTE ZURÜCKSETZEN
             if (this.activeObject) {
                 this.activeObject.setAttribute('position', this.originalState.pos);
                 this.activeObject.setAttribute('rotation', this.originalState.rot);
@@ -400,7 +399,7 @@
                 this.activePanel.setAttribute('scale', this.originalPanelState.scale); 
             }
 
-            // --- 2. WELT WIEDERHERSTELLEN ---
+            // WELT WIEDERHERSTELLEN
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
@@ -444,7 +443,7 @@
         }
     });
 
-    // --- GRAB LOGIK ---
+    // HALTE FUNKTION FÜR AR
     AFRAME.registerComponent('ar-grab-interaction', {
         init: function () {
             this.grabbed = null;
@@ -474,7 +473,7 @@
         }
     });
 
-    // --- FIXED CONTROLLER HANDLER ---
+    // CONTROLLER HANDLER
     AFRAME.registerComponent('vr-controller-handler', {
         schema: {
             hand: {type: 'string', default: 'right'} 
@@ -493,7 +492,6 @@
             this.tablet = document.querySelector('#vr-tablet');
         },
         toggleVRMap: function () {
-            // FIX: Karte geht jetzt immer, AUSSER wir sind im "Echten" AR-Inspektionsmodus (Ein Objekt wird betrachtet)
             const arManager = this.el.sceneEl.components['ar-manager'];
             if (arManager && arManager.inAR) {
                 console.log("Map blockiert wegen AR-Inspektion");
@@ -759,7 +757,7 @@
     </a-scene>
 
     <script>
-        // --- JAVASCRIPT LOGIK ---
+        // JAVASCRIPT FÜR WEB MAP UND STARTSCREEN
         
         const startOverlay = document.getElementById('start-screen');
         const mapOverlay = document.getElementById('map-overlay');
@@ -793,7 +791,7 @@
 
         let currentFloor = 'EG';
 
-        // --- START LOGIK ---
+        // START FUNKTION
         function startGame() {
             startOverlay.style.display = 'none';
             btnOpenMap.style.display = 'block'; 
@@ -803,19 +801,16 @@
                     else openMap();
                 }
             });
-            // Initialisiere VR Pins
             renderVRPins();
         }
 
         document.getElementById('btn-web').addEventListener('click', startGame);
         document.getElementById('btn-vr').addEventListener('click', () => {
             startGame();
-            // WICHTIG: Wir rufen enterAR() auf, NICHT enterVR().
-            // Das triggert die Permission-Abfrage für die Kamera/Raumdaten.
             scene.enterAR();
         });
 
-        // --- WEB MAP FUNKTIONEN ---
+        // WEB MAP FUNKTIONEN
         function openMap() {
             mapOverlay.style.display = 'flex';
             renderPins();
@@ -855,7 +850,7 @@
             });
         }
 
-        // --- VR MAP FUNKTIONEN ---
+        // VR MAP FUNKTIONEN
         window.switchVRFloor = function(floor) {
             currentFloor = floor;
             const vrMapPlane = document.getElementById('vr-map-plane');
@@ -866,7 +861,7 @@
 
         function renderVRPins() {
             const container = document.getElementById('vr-pins-container');
-            container.innerHTML = ''; // Löschen
+            container.innerHTML = ''; 
 
             const mapWidth3D = 1.0;
             const mapHeight3D = 0.5625;
