@@ -211,7 +211,7 @@
         }
     });
 
-    // --- AGGRESSIVE AR MANAGER (FIX: KILL BACKGROUND & ENVIRONMENT) ---
+    // --- AGGRESSIVE AR MANAGER (FIX: START AS AR BUT SHOW VR CONTENT) ---
     AFRAME.registerComponent('ar-manager', {
         init: function () {
             this.inAR = false;
@@ -251,16 +251,16 @@
             }
         },
         enterAR: function () {
-            // --- 1. ALLES VERSTECKEN & HINTERGRUND ZERSTÖREN ---
+            // --- 1. MUSEUM VERSTECKEN & HINTERGRUND ZERSTÖREN ---
             const museum = document.getElementById('museum-entity');
             const sky = document.querySelector('a-sky');
             const rings = document.querySelectorAll('a-ring');
             const sceneEl = this.el.sceneEl;
 
-            // WICHTIG: Das Hintergrund-Attribut komplett entfernen
+            // WICHTIG: Das Hintergrund-Attribut komplett entfernen für Passthrough
             sceneEl.removeAttribute('background');
             
-            // Three.js Background & Environment auf null setzen (Zwingend für Passthrough!)
+            // Three.js Background & Environment auf null setzen
             if (sceneEl.object3D) {
                 sceneEl.object3D.background = null;
                 sceneEl.object3D.environment = null;
@@ -433,8 +433,6 @@
                 this.el.sceneEl.object3D.environment = this.skyTexture;
                 this.el.sceneEl.object3D.environmentIntensity = 0.8;
             }
-            // Hintergrund auf Schwarz zurücksetzen (oder was gewünscht ist)
-            // this.el.sceneEl.setAttribute('background', 'color: black'); 
             
             document.querySelectorAll('.ar-artifact').forEach(a => {
                 a.setAttribute('visible', true);
@@ -620,7 +618,7 @@
     <a-scene viewer-engine debug-manager coordinate-logger tour-manager ar-manager 
              background="color: transparent"
              renderer="colorManagement: true; antialias: true; alpha: true" 
-             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, immersive-ar; overlayElement: #map-overlay; requiredFeatures: local-floor">
+             webxr="optionalFeatures: hit-test, local-floor, dom-overlay, immersive-ar, passthrough; overlayElement: #map-overlay; requiredFeatures: local-floor">
         
         <a-assets>
             <a-asset-item id="museum-model" src="assets/Museum.glb"></a-asset-item>
@@ -813,7 +811,9 @@
         document.getElementById('btn-web').addEventListener('click', startGame);
         document.getElementById('btn-vr').addEventListener('click', () => {
             startGame();
-            scene.enterVR();
+            // WICHTIG: Wir rufen enterAR() auf, NICHT enterVR().
+            // Das triggert die Permission-Abfrage für die Kamera/Raumdaten.
+            scene.enterAR();
         });
 
         // --- WEB MAP FUNKTIONEN ---
@@ -857,7 +857,6 @@
         }
 
         // --- VR MAP FUNKTIONEN ---
-        // Diese Funktion wird global verfügbar gemacht für die OnClick-Events der 3D Buttons
         window.switchVRFloor = function(floor) {
             currentFloor = floor;
             const vrMapPlane = document.getElementById('vr-map-plane');
@@ -870,27 +869,20 @@
             const container = document.getElementById('vr-pins-container');
             container.innerHTML = ''; // Löschen
 
-            // Tablet Dimensionen (Abgestimmt auf die a-plane Größe)
             const mapWidth3D = 1.0;
             const mapHeight3D = 0.5625;
 
             mapData.forEach(point => {
                 if (point.floor === currentFloor) {
-                    // Umrechnung Pixel -> 3D Koordinaten
-                    // In Web: 0/0 ist oben links. In 3D: 0/0 ist Mitte.
-                    // X: (px / 1920) * Breite
                     const x = (point.px / REF_WIDTH) * mapWidth3D;
-                    // Y: (px / 1080) * Höhe (Invertiert, weil Y nach oben positiv ist)
                     const y = -((point.py / REF_HEIGHT) * mapHeight3D);
 
-                    // Pin erstellen
                     const pin = document.createElement('a-circle');
                     pin.setAttribute('radius', '0.02');
                     pin.setAttribute('color', '#ff3333');
                     pin.setAttribute('position', `${x} ${y} 0.01`);
-                    pin.setAttribute('class', 'vr-map-pin'); // Wichtig: Erstmal NICHT clickable (wird bei Toggle gesetzt)
+                    pin.setAttribute('class', 'vr-map-pin'); 
                     
-                    // Component anhängen für Klick-Logik
                     pin.setAttribute('vr-map-pin-click', {
                         pos: point.pos,
                         rot: point.rot
